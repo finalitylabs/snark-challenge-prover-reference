@@ -521,6 +521,7 @@ MNT_G1 G1_add4(MNT_G1 a, MNT_G1 b) {
 }
 
 MNT_G1 G1_double4(MNT_G1 a) {
+  if(int768_eq(a.Z_, mnt4753_ZERO)) return a;
 
   MNT_G1 res = G1_ZERO;
 
@@ -549,6 +550,13 @@ MNT_G1 G1_double4(MNT_G1 a) {
 
 
 MNT_G1 G1_mixed_add4(MNT_G1 a, MNT_G1 b) {
+  if(int768_eq(a.Z_, mnt4753_ZERO)) {
+    a.X_ = b.X_;
+    a.Y_ = b.Y_;
+    a.Z_ = mnt4753_ONE;
+    return a;
+  }
+
   MNT_G1 res = G1_ZERO;
   int768 X1_Z2 = a.X_;
   int768 X2_Z1 = int768_mul4(a.Z_, b.X_);
@@ -684,44 +692,26 @@ __kernel void mnt4753_fft(
 
 __kernel void G1_batched_lookup_multiexp(
     __global MNT_G1 *bases,
-    __global MNT_G1 *buckets,
     __global MNT_G1 *results,
     __global int768 *exps,
     __global bool *dm,
     uint skip,
     uint n) {
 
-  uint32 gid = get_global_id(0);
+  uint32 work = get_global_id(0);
+  uint32 works = get_global_size(0);
+  
+  // res[1024]
+  uint len = (uint)ceil(n / (float)works); // 16384 / 1024 = 16
+  uint32 nstart = len * work; // if work = 10; 16*10 = 160
+  uint32 nend = min(nstart + len, n); // min(160+16, 16384) = 176 
 
-  if(gid == 20736) {
-    printf("found unit\n");
+  //bases += skip;
+  MNT_G1 p = G1_ZERO;
+  for(int i = 767; i >= 0; i--) {
+    p = G1_double4(p);
+    if(int768_get_bit(exps[work], i))
+      p = G1_mixed_add4(p, bases[work]);
   }
-
-  bases += skip;
-  buckets += BUCKET_LEN * gid;
-  for(uint i = 0; i < BUCKET_LEN; i++) buckets[i] = G1_ZERO;
-
-  uint len = (uint)ceil(n / (float)NUM_WORKS);
-  uint32 nstart = len * (gid / NUM_WINDOWS);
-  uint32 nend = min(nstart + len, n);
-
-  uint bits = (gid % NUM_WINDOWS) * WINDOW_SIZE;
-  ushort w = min((ushort)WINDOW_SIZE, (ushort)(768 - bits));
-
-  MNT_G1 res = G1_ZERO;
-  for(uint i = nstart; i < nend; i++) {
-    uint ind = int768_get_bits(exps[i], bits, w);
-    if(bits == 0 && ind == 1) res = G1_mixed_add4(res, bases[i]);
-    else if(ind--) buckets[ind] = G1_mixed_add4(buckets[ind], bases[i]);
-    //if(bits == 0 && ind == 1) res = G1_mixed_add4(res, G1_ZERO);
-    //else if(ind--) buckets[ind] = G1_mixed_add4(buckets[ind], G1_ZERO);
-  }
-
-  MNT_G1 acc = G1_ZERO;
-  for(int j = BUCKET_LEN - 1; j >= 0; j--) {
-    acc = G1_mixed_add4(acc, buckets[j]);
-    res = G1_mixed_add4(res, acc);
-  }
-
-  results[gid] = res;
+  results[work] = p;
 }

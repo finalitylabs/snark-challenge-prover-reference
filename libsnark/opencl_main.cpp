@@ -130,14 +130,18 @@ int run_prover(
     printf("Multi-exponentiations\n");
 
     // Now the 5 multi-exponentiations
+    printf("A G1 multiexp GPU\n");
+    printf("params_m:%u\n", B::params_m(params));
+    typename B::G1 *evaluation_At_GPU = B::multiexp_G1_GPU(
+        B::input_w(input), B::params_A(params), B::params_m(params) , k);
+    exit(1);
+
     printf("A G1 multiexp\n");
     typename B::G1 *evaluation_At = B::multiexp_G1(
         B::input_w(input), B::params_A(params), B::params_m(params) + 1);
     
-    printf("A G1 multiexp GPU\n");
-    typename B::G1 *evaluation_At_GPU = B::multiexp_G1_GPU(
-        B::input_w(input), B::params_A(params), B::params_m(params), k);
-    exit(1);
+
+
 
     printf("B G1 multiexp\n");
     typename B::G1 *evaluation_Bt1 = B::multiexp_G1(

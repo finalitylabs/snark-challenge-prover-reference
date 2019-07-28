@@ -556,14 +556,12 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
                               mnt4753_libsnark::vector_G1 *g_start,
                               size_t length, Kernel kern) {
   printf("GPU MULTI_EXP START\n");
-  size_t NUM_GROUPS  = 192;
-  size_t WINDOW_SIZE = 7;
-  size_t NUM_WINDOWS = 108;
-  size_t TABLE_SIZE = 1 << WINDOW_SIZE;
-  size_t BUCKET_LEN = 1 << WINDOW_SIZE;
+  size_t NUM_WORKS  = 1024;
 
   std::vector<Fr<mnt4753_pp>> &scalar_data = *scalar_start->data;
   std::vector<libff::G1<mnt4753_pp>> &g_data = *g_start->data;
+
+  g_data[16].print();
   
   libff::G1<mnt4753_pp> *table = new libff::G1<mnt4753_pp>[length];
   // initialize table
@@ -578,19 +576,34 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   
   bool skip = 0;
   bool *dm = new bool[length];
-  libff::G1<mnt4753_pp> result; 
+  libff::G1<mnt4753_pp> result;
   unsigned int correct;
 
   cl_mem g1_base_buffer;
   cl_mem g1_result_buffer;
-  cl_mem g1_bucket_buffer;
   cl_mem exp_buffer;
   // not sure how to handle the skip buffer, i dont see it in libsnark yet
   // /depends/libff/algebra/scalar_mul/multiexp.tcc appears to have the impl
   cl_mem dm_buffer;
   //cl_mem res;
-  // Fill our data set with field inputs from param gen
+
+  // Fill our data set with inputs from param gen
   //
+  libff::G1<mnt4753_pp> *data_bases = new libff::G1<mnt4753_pp>[n];
+  Fr<mnt4753_pp> *data_scalars = new Fr<mnt4753_pp>[n];
+
+  for(int i = 0; i < n; i++) {
+    memcpy(&data_bases[i], &g_data[i], sizeof(libff::G1<mnt4753_pp>));
+  }
+
+  for(int i = 0; i < n; i++) {
+    memcpy(&data_scalars[i], &scalar_data[i], sizeof(Fr<mnt4753_pp>));
+  }
+  
+  
+  printf("copied base: \n");
+  data_bases[16].print();
+  
   unsigned int count = n;
 
 
@@ -608,8 +621,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   //
   printf("creating buffer\n");
   g1_base_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * count, NULL, NULL);
-  g1_result_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * NUM_WINDOWS * NUM_GROUPS, NULL, NULL);
-  g1_bucket_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * BUCKET_LEN * NUM_WINDOWS * NUM_GROUPS, NULL, NULL);
+  g1_result_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * count, NULL, NULL);
   exp_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(Fr<mnt4753_pp>) * count, NULL, NULL);
   dm_buffer = clCreateBuffer(kern.context, CL_MEM_READ_ONLY, sizeof(bool) * count, NULL, NULL);
   //res = clCreateBuffer(kern.context,  CL_MEM_READ_ONLY,  sizeof(libff::G1<mnt4753_pp>), NULL, NULL);
@@ -621,18 +633,19 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   // }
   // Write our data set into the input array in device memory 
   //
+
   auto start = high_resolution_clock::now();
   for(int i=0; i<length; i++) {
 
   }
-  kern.err = clEnqueueWriteBuffer(kern.commands, g1_base_buffer, CL_TRUE, 0, sizeof(libff::G1<mnt4753_pp>) * count, &g_data, 0, NULL, NULL);
+  kern.err = clEnqueueWriteBuffer(kern.commands, g1_base_buffer, CL_TRUE, 0, sizeof(libff::G1<mnt4753_pp>) * count, data_bases, 0, NULL, NULL);
   if (kern.err != CL_SUCCESS)
   {
       printf("Error: Failed to write to base source array!\n");
       exit(1);
   }
 
-  kern.err = clEnqueueWriteBuffer(kern.commands, exp_buffer, CL_TRUE, 0, sizeof(Fr<mnt4753_pp>) * count, &scalar_data, 0, NULL, NULL);
+  kern.err = clEnqueueWriteBuffer(kern.commands, exp_buffer, CL_TRUE, 0, sizeof(Fr<mnt4753_pp>) * count, data_scalars, 0, NULL, NULL);
   if (kern.err != CL_SUCCESS)
   {
       printf("Error: Failed to write to source array!\n");
@@ -644,6 +657,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
       printf("Error: Failed to write to omega source array!\n");
       exit(1);
   }
+
   auto stop = high_resolution_clock::now();
   auto duration = duration_cast<microseconds>(stop - start); 
   cout << "Time taken by GPU write function: "
@@ -654,12 +668,11 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   //
   kern.err = 0;
   kern.err |= clSetKernelArg(kernel, 0, sizeof(cl_mem), &g1_base_buffer);
-  kern.err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &g1_bucket_buffer);
-  kern.err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &g1_result_buffer);
-  kern.err |= clSetKernelArg(kernel, 3, sizeof(cl_mem), &exp_buffer);
-  kern.err |= clSetKernelArg(kernel, 4, sizeof(cl_mem), &dm_buffer);
-  kern.err |= clSetKernelArg(kernel, 5, sizeof(unsigned int), &skip);
-  kern.err |= clSetKernelArg(kernel, 6, sizeof(unsigned int), &length);
+  kern.err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &g1_result_buffer);
+  kern.err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &exp_buffer);
+  kern.err |= clSetKernelArg(kernel, 3, sizeof(cl_mem), &dm_buffer);
+  kern.err |= clSetKernelArg(kernel, 4, sizeof(unsigned int), &skip);
+  kern.err |= clSetKernelArg(kernel, 5, sizeof(unsigned int), &length);
   if (kern.err != CL_SUCCESS)
   {
       printf("Error: Failed to set kernel arguments! %d\n", kern.err);
@@ -678,8 +691,8 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   printf("Max work size: %u\n", kern.local);
 
   printf("queueing multi exp kernel\n");
-  kern.global = NUM_WINDOWS * NUM_GROUPS;
-  kern.local = 64;
+  kern.global = n;
+  //kern.local = 64;
   kern.err = clEnqueueNDRangeKernel(kern.commands, kernel, 1, NULL, &kern.global, &kern.local, 0, NULL, &event);
   if (kern.err)
   {
@@ -692,7 +705,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   clFinish(kern.commands);
 
   libff::G1<mnt4753_pp> acc = libff::G1<mnt4753_pp>::zero();
-  libff::G1<mnt4753_pp> *res = new libff::G1<mnt4753_pp>[NUM_WINDOWS * NUM_GROUPS];
+  libff::G1<mnt4753_pp> *res = new libff::G1<mnt4753_pp>[n];
 
   // Time kernel execution time without read/write
   //
@@ -707,13 +720,14 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   //
   start = high_resolution_clock::now();
 
-  kern.err = clEnqueueReadBuffer(kern.commands, g1_result_buffer, CL_TRUE, 0, sizeof(libff::G1<mnt4753_pp>) * NUM_WINDOWS * NUM_GROUPS, res, 0, NULL, NULL );  
+  kern.err = clEnqueueReadBuffer(kern.commands, g1_result_buffer, CL_TRUE, 0, sizeof(libff::G1<mnt4753_pp>) * n, res, 0, NULL, NULL );  
   if (kern.err != CL_SUCCESS)
   {
       printf("Error: Failed to read output array! %d\n", kern.err);
       exit(1);
   }
-  
+
+  clFinish(kern.commands);
   stop = high_resolution_clock::now();
   duration = duration_cast<microseconds>(stop - start); 
   cout << "Time taken by GPU read function: "
@@ -721,7 +735,8 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   // Validate our results
   //
   printf("Kernel Result \n");
-  res[0].print();
+  res[16].print();
+  printf("n: %u\n",n);
 
 
   // if(results[0] == _h4_1) {
@@ -737,7 +752,6 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
 
   clReleaseMemObject(g1_base_buffer);
   clReleaseMemObject(g1_result_buffer);
-  clReleaseMemObject(g1_bucket_buffer);
   clReleaseMemObject(dm_buffer);
   clReleaseMemObject(exp_buffer);
   //clReleaseProgram(kern.program);
