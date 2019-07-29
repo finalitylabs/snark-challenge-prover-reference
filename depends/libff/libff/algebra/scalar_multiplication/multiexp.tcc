@@ -186,16 +186,29 @@ T multi_exp_inner(
         std::remove_reference<decltype(*exponents)>::type::num_limbs;
     std::vector<bigint<exp_num_limbs> > bn_exponents(length);
     size_t num_bits = 0;
-
+ 
+    uint bit_counter = 0;
     for (size_t i = 0; i < length; i++)
     {
         bn_exponents[i] = exponents[i].as_bigint();
         num_bits = std::max(num_bits, bn_exponents[i].num_bits());
+        if(num_bits == 753) {
+          bit_counter++;
+        } else {
+          //printf("off bit size: %u\n", num_bits);
+        }
     }
+    
+    //printf("bn exponent\n");
+    //bn_exponents[0].print();
+
+    //printf("num_bits: %u\n", bit_counter);
+    //bn_exponents[0].print();
 
     size_t num_groups = (num_bits + c - 1) / c;
 
     T result;
+    //result.print();
 
     bool result_nonzero = false;
 
@@ -499,9 +512,9 @@ T multi_exp_with_mixed_addition(typename std::vector<T>::const_iterator vec_star
         {
             p.emplace_back(*scalar_it);
             g.emplace_back(*value_it);
-            if(ind == 453) {
-              //scalar_it->print();
-              g[ind].print();
+            if(ind == 0) {
+              scalar_it->print();
+              //g[ind].print();
             }
             ++num_other;
             ind++;

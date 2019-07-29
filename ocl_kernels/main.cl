@@ -767,23 +767,29 @@ __kernel void G1_batched_lookup_multiexp(
   //bases += skip;
   MNT_G1 p = G1_ZERO;
   MNT_G1 test = G1_ZERO;
+  MNT_G1 run = G1_ZERO;
+  //run = G1_add4(run, exps[work]);
   bool bit = 0;
 
-  for(int i = 767; i >= 16; i--) {
+  for(int i = 767; i >= 0; i--) {
     p = G1_double4(p);
+    uint ind = 767 - i;
 
     if(work == 0) {
-      if(i == 16) {
+      if(i == 19) {
         test = p;
-        bit = EXPONENT_get_bits(exps[nstart], i, 1);
+        //bit = EXPONENT_get_bits(exps[nstart], ind, 1);
+        bit = int768_get_bit(exps[nstart], i);
         dm[0] = bit;
-        printf("kernel l.v[0] %u\n", exps[nstart].v[23]);
+        printf("kernel l.v[23] %u\n", exps[nstart].v[0]);
       }
     }
 
     for(uint j = nstart; j < nend; j++) {
-      if(EXPONENT_get_bits(exps[j], i, 1))
+      //if(EXPONENT_get_bits(exps[j], ind, 1))
+      if(int768_get_bit(exps[j], i))
         p = G1_add4(p, bases[j]);
+
     }
   }
   results[work] = p;

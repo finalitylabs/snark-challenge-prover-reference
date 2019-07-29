@@ -627,7 +627,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   //
   printf("creating buffer\n");
   g1_base_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * count, NULL, NULL);
-  g1_result_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * NUM_WORKS, NULL, NULL);
+  g1_result_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * n, NULL, NULL);
   exp_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(Fr<mnt4753_pp>) * count, NULL, NULL);
   dm_buffer = clCreateBuffer(kern.context, CL_MEM_READ_ONLY, sizeof(bool) * count, NULL, NULL);
   //res = clCreateBuffer(kern.context,  CL_MEM_READ_ONLY,  sizeof(libff::G1<mnt4753_pp>), NULL, NULL);
@@ -695,8 +695,8 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   printf("Max work size: %u\n", kern.local);
 
   printf("queueing multi exp kernel\n");
-  kern.global = NUM_WORKS;
-  kern.local = 64;
+  kern.global = n;
+  //kern.local = 64;
   kern.err = clEnqueueNDRangeKernel(kern.commands, kernel, 1, NULL, &kern.global, &kern.local, 0, NULL, &event);
   if (kern.err)
   {
@@ -708,9 +708,9 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   clWaitForEvents(1, &event);
   clFinish(kern.commands);
 
-  //libff::G1<mnt4753_pp> acc = libff::G1<mnt4753_pp>::zero();
-  libff::G1<mnt4753_pp> acc = g_data[0];
-  libff::G1<mnt4753_pp> *res = new libff::G1<mnt4753_pp>[NUM_WORKS];
+  libff::G1<mnt4753_pp> acc = libff::G1<mnt4753_pp>::zero();
+  //libff::G1<mnt4753_pp> acc = g_data[0];
+  libff::G1<mnt4753_pp> *res = new libff::G1<mnt4753_pp>[n];
   bool *dm2 = new bool[length];
 
   // Time kernel execution time without read/write
@@ -726,7 +726,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   //
   start = high_resolution_clock::now();
 
-  kern.err = clEnqueueReadBuffer(kern.commands, g1_result_buffer, CL_TRUE, 0, sizeof(libff::G1<mnt4753_pp>) * NUM_WORKS, res, 0, NULL, NULL );  
+  kern.err = clEnqueueReadBuffer(kern.commands, g1_result_buffer, CL_TRUE, 0, sizeof(libff::G1<mnt4753_pp>) * n, res, 0, NULL, NULL );  
   if (kern.err != CL_SUCCESS)
   {
       printf("Error: Failed to read output array! %d\n", kern.err);
@@ -748,16 +748,19 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   // Validate our results
   //
   printf("Kernel Result \n");
-  printf("BIT: %u\n", dm2[0]);
-  res[0].print();
+  printf("Kernel BIT: %u\n", dm2[0]);
+  //res[0].print();
+
+  Fr<mnt4753_pp> g = data_scalars[0].as_bigint();
+  printf("CPU BIT: %u\n", g.as_bigint().test_bit(0));
   printf("n: %u\n",n);
   
-  for(int i=0; i<NUM_WORKS; i++) {
+  for(int i=0; i<n; i++) {
     //acc = acc + res[i];
-    acc = acc.add(res[i]);
+    acc = acc + res[i];
   }
 
-  //acc = acc.add(g_data[0]);
+  acc = acc + g_data[0];
   acc.print();
 
   // if(results[0] == _h4_1) {
