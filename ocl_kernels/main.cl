@@ -111,14 +111,19 @@ bool int768_get_bit(int768 l, uint i) {
     return (l.v[23] >> (i - 736)) & 1;
 }
 
-uint int768_get_bits(int768 l, uint skip, uint window) {
+bool EXPONENT_get_bit(int768 l, uint i) {
+  return (l.v[FIELD_LIMBS - 1 - i / LIMB_BITS] >> (LIMB_BITS - 1 - (i % LIMB_BITS))) & 1;
+}
+
+uint EXPONENT_get_bits(int768 l, uint skip, uint window) {
   uint ret = 0;
   for(uint i = 0; i < window; i++) {
     ret <<= 1;
-    ret |= int768_get_bit(l, skip + i);
+    ret |= EXPONENT_get_bit(l, skip + i);
   }
   return ret;
 }
+
 
 // Greater than or equal
 bool int768_gte(int768 a, int768 b) {
@@ -762,16 +767,22 @@ __kernel void G1_batched_lookup_multiexp(
   //bases += skip;
   MNT_G1 p = G1_ZERO;
   MNT_G1 test = G1_ZERO;
+  bool bit = 0;
 
-  for(int i = 767; i >= 0; i--) {
+  for(int i = 767; i >= 16; i--) {
     p = G1_double4(p);
+
     if(work == 0) {
-      if(i == 0) {
+      if(i == 16) {
         test = p;
+        bit = EXPONENT_get_bits(exps[nstart], i, 1);
+        dm[0] = bit;
+        printf("kernel l.v[0] %u\n", exps[nstart].v[23]);
       }
     }
+
     for(uint j = nstart; j < nend; j++) {
-      if(int768_get_bit(exps[j], i))
+      if(EXPONENT_get_bits(exps[j], i, 1))
         p = G1_add4(p, bases[j]);
     }
   }

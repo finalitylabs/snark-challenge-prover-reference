@@ -569,9 +569,9 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   g_data[0].print();
   //scalar_data[0].print();
   
-  libff::G1<mnt4753_pp> *table = new libff::G1<mnt4753_pp>[length];
+  //libff::G1<mnt4753_pp> *table = new libff::G1<mnt4753_pp>[length];
   // initialize table
-  for(int i=0; i<length; i++) { table[i] = table[i] + g_data[i]; }
+  //for(int i=0; i<length; i++) { table[i] = table[i] + g_data[i]; }
   
   // compute table with kernel
   cl_kernel kernel;                   // compute kernel
@@ -607,8 +607,8 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   
   
   printf("copied base: \n");
-  //data_scalars[0].print();
-  data_bases[453].print();
+  data_scalars[0].print();
+  //data_bases[453].print();
 
   unsigned int count = n;
 
@@ -641,9 +641,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   //
 
   auto start = high_resolution_clock::now();
-  for(int i=0; i<length; i++) {
 
-  }
   kern.err = clEnqueueWriteBuffer(kern.commands, g1_base_buffer, CL_TRUE, 0, sizeof(libff::G1<mnt4753_pp>) * count, data_bases, 0, NULL, NULL);
   if (kern.err != CL_SUCCESS)
   {
@@ -713,6 +711,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   //libff::G1<mnt4753_pp> acc = libff::G1<mnt4753_pp>::zero();
   libff::G1<mnt4753_pp> acc = g_data[0];
   libff::G1<mnt4753_pp> *res = new libff::G1<mnt4753_pp>[NUM_WORKS];
+  bool *dm2 = new bool[length];
 
   // Time kernel execution time without read/write
   //
@@ -734,6 +733,13 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
       exit(1);
   }
 
+  kern.err = clEnqueueReadBuffer(kern.commands, dm_buffer, CL_TRUE, 0, sizeof(bool) * n, dm2, 0, NULL, NULL );  
+  if (kern.err != CL_SUCCESS)
+  {
+      printf("Error: Failed to read output array! %d\n", kern.err);
+      exit(1);
+  }
+
   clFinish(kern.commands);
   stop = high_resolution_clock::now();
   duration = duration_cast<microseconds>(stop - start); 
@@ -742,6 +748,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   // Validate our results
   //
   printf("Kernel Result \n");
+  printf("BIT: %u\n", dm2[0]);
   res[0].print();
   printf("n: %u\n",n);
   

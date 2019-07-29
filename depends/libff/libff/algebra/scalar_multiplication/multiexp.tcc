@@ -175,13 +175,13 @@ T multi_exp_inner(
     printf("multi_exp_inner overload 3\n");
     UNUSED(exponents_end);
     size_t length = bases_end - bases;
-    printf("length: %u\n", length);
+    //printf("length: %u\n", length);
 
     // empirically, this seems to be a decent estimate of the optimal value of c
     size_t log2_length = log2(length);
     size_t c = log2_length - (log2_length / 3 - 2);
-    printf("log2 length: %u\n", log2_length);
-    printf("c: %u\n", c);
+    //printf("log2 length: %u\n", log2_length);
+    //printf("c: %u\n", c);
     const mp_size_t exp_num_limbs =
         std::remove_reference<decltype(*exponents)>::type::num_limbs;
     std::vector<bigint<exp_num_limbs> > bn_exponents(length);
@@ -515,8 +515,10 @@ T multi_exp_with_mixed_addition(typename std::vector<T>::const_iterator vec_star
     print_indent(); printf("* Elements of w remaining: %zu (%0.2f%%)\n", num_other, 100.*num_other/(num_skip+num_add+num_other));
 
     leave_block("Process scalar vector");
-
-    return acc + multi_exp<T, FieldT, Method>(g.begin(), g.end(), p.begin(), p.end(), chunks);
+    T ac2 = T::zero();
+    ac2 = multi_exp<T, FieldT, Method>(g.begin(), g.end(), p.begin(), p.end(), chunks);
+    ac2.print();
+    return acc + ac2;
 }
 
 template <typename T>
