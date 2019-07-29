@@ -172,14 +172,16 @@ T multi_exp_inner(
     typename std::vector<FieldT>::const_iterator exponents,
     typename std::vector<FieldT>::const_iterator exponents_end)
 {
-    //printf("multi_exp_inner overload 3\n");
+    printf("multi_exp_inner overload 3\n");
     UNUSED(exponents_end);
     size_t length = bases_end - bases;
+    printf("length: %u\n", length);
 
     // empirically, this seems to be a decent estimate of the optimal value of c
     size_t log2_length = log2(length);
     size_t c = log2_length - (log2_length / 3 - 2);
-
+    printf("log2 length: %u\n", log2_length);
+    printf("c: %u\n", c);
     const mp_size_t exp_num_limbs =
         std::remove_reference<decltype(*exponents)>::type::num_limbs;
     std::vector<bigint<exp_num_limbs> > bn_exponents(length);
@@ -229,6 +231,7 @@ T multi_exp_inner(
             if (bucket_nonzero[id])
             {
 #ifdef USE_MIXED_ADDITION
+                printf("mixed add\n");
                 buckets[id] = buckets[id].mixed_add(bases[i]);
 #else
                 buckets[id] = buckets[id] + bases[i];
@@ -242,6 +245,7 @@ T multi_exp_inner(
         }
 
 #ifdef USE_MIXED_ADDITION
+        printf("mixed add\n");
         batch_to_special(buckets);
 #endif
 
@@ -255,6 +259,7 @@ T multi_exp_inner(
                 if (running_sum_nonzero)
                 {
 #ifdef USE_MIXED_ADDITION
+                    printf("mixed add\n");
                     running_sum = running_sum.mixed_add(buckets[i]);
 #else
                     running_sum = running_sum + buckets[i];
@@ -281,7 +286,7 @@ T multi_exp_inner(
             }
         }
     }
-
+    //result.print()
     return result;
 }
 
@@ -293,7 +298,7 @@ T multi_exp_inner(
     typename std::vector<FieldT>::const_iterator scalar_start,
     typename std::vector<FieldT>::const_iterator scalar_end)
 {
-    //printf("multi_exp_inner overload 4\n");
+    printf("multi_exp_inner overload 4\n");
     const mp_size_t n = std::remove_reference<decltype(*scalar_start)>::type::num_limbs;
 
     if (vec_start == vec_end)
@@ -456,6 +461,7 @@ T multi_exp_with_mixed_addition(typename std::vector<T>::const_iterator vec_star
 {
     assert(std::distance(vec_start, vec_end) == std::distance(scalar_start, scalar_end));
     enter_block("Process scalar vector");
+
     auto value_it = vec_start;
     auto scalar_it = scalar_start;
 
@@ -469,7 +475,7 @@ T multi_exp_with_mixed_addition(typename std::vector<T>::const_iterator vec_star
     size_t num_skip = 0;
     size_t num_add = 0;
     size_t num_other = 0;
-
+    uint ind = 0;
     for (; scalar_it != scalar_end; ++scalar_it, ++value_it)
     {
         if (*scalar_it == zero)
@@ -480,20 +486,31 @@ T multi_exp_with_mixed_addition(typename std::vector<T>::const_iterator vec_star
         else if (*scalar_it == one)
         {
 #ifdef USE_MIXED_ADDITION
+            printf("mixed add 1\n");
             acc = acc.mixed_add(*value_it);
 #else
             acc = acc + (*value_it);
 #endif
+            printf("Special add at: %u\n", ind);
+            //value_it->print();
             ++num_add;
         }
         else
         {
             p.emplace_back(*scalar_it);
             g.emplace_back(*value_it);
+            if(ind == 453) {
+              //scalar_it->print();
+              g[ind].print();
+            }
             ++num_other;
+            ind++;
         }
     }
-    print_indent(); printf("* Elements of w skipped: %zu (%0.2f%%)\n", num_skip, 100.*num_skip/(num_skip+num_add+num_other));
+    printf("vector size after: %u\n", g.size());
+    //acc.print();
+    //p[0].print();
+    print_indent(); printf("* Elements wee of w skipped: %zu (%0.2f%%)\n", num_skip, 100.*num_skip/(num_skip+num_add+num_other));
     print_indent(); printf("* Elements of w processed with special addition: %zu (%0.2f%%)\n", num_add, 100.*num_add/(num_skip+num_add+num_other));
     print_indent(); printf("* Elements of w remaining: %zu (%0.2f%%)\n", num_other, 100.*num_other/(num_skip+num_add+num_other));
 

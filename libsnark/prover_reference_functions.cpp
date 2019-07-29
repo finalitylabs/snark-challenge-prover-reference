@@ -49,7 +49,9 @@ G multiexp(typename std::vector<Fr>::const_iterator scalar_start,
 #else
   const size_t chunks = 1;
 #endif
-
+  printf("cpu multiexp chunks: %u\n", chunks);
+  //scalar_start[0].print();
+  //g_start[0].print();
   return libff::multi_exp_with_mixed_addition<G, Fr, method>(
       g_start, g_start + length, scalar_start, scalar_start + length, chunks);
 }
@@ -541,6 +543,10 @@ mnt4753_libsnark::G1 *
 mnt4753_libsnark::multiexp_G1(mnt4753_libsnark::vector_Fr *scalar_start,
                               mnt4753_libsnark::vector_G1 *g_start,
                               size_t length) {
+  std::vector<libff::G1<mnt4753_pp>> &g_data = *g_start->data;
+  std::vector<Fr<mnt4753_pp>> &scalar_data = *scalar_start->data;
+  //scalar_data[0].print();
+  //g_data[0].print();
 
   mnt4753_libsnark::G1 *t = new mnt4753_libsnark::G1{
       multiexp<libff::G1<mnt4753_pp>, Fr<mnt4753_pp>>(
@@ -560,8 +566,8 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
 
   std::vector<Fr<mnt4753_pp>> &scalar_data = *scalar_start->data;
   std::vector<libff::G1<mnt4753_pp>> &g_data = *g_start->data;
-
-  g_data[16].print();
+  g_data[0].print();
+  //scalar_data[0].print();
   
   libff::G1<mnt4753_pp> *table = new libff::G1<mnt4753_pp>[length];
   // initialize table
@@ -576,7 +582,6 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   
   bool skip = 0;
   bool *dm = new bool[length];
-  libff::G1<mnt4753_pp> result;
   unsigned int correct;
 
   cl_mem g1_base_buffer;
@@ -592,18 +597,19 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   libff::G1<mnt4753_pp> *data_bases = new libff::G1<mnt4753_pp>[n];
   Fr<mnt4753_pp> *data_scalars = new Fr<mnt4753_pp>[n];
 
-  for(int i = 0; i < n; i++) {
-    memcpy(&data_bases[i], &g_data[i], sizeof(libff::G1<mnt4753_pp>));
+  for(int i = 1; i < n; i++) {
+    memcpy(&data_bases[i-1], &g_data[i], sizeof(libff::G1<mnt4753_pp>));
   }
 
-  for(int i = 0; i < n; i++) {
-    memcpy(&data_scalars[i], &scalar_data[i], sizeof(Fr<mnt4753_pp>));
+  for(int i = 1; i < n; i++) {
+    memcpy(&data_scalars[i-1], &scalar_data[i], sizeof(Fr<mnt4753_pp>));
   }
   
   
   printf("copied base: \n");
-  data_bases[16].print();
-  
+  //data_scalars[0].print();
+  data_bases[453].print();
+
   unsigned int count = n;
 
 
@@ -621,7 +627,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   //
   printf("creating buffer\n");
   g1_base_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * count, NULL, NULL);
-  g1_result_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * count, NULL, NULL);
+  g1_result_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * NUM_WORKS, NULL, NULL);
   exp_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(Fr<mnt4753_pp>) * count, NULL, NULL);
   dm_buffer = clCreateBuffer(kern.context, CL_MEM_READ_ONLY, sizeof(bool) * count, NULL, NULL);
   //res = clCreateBuffer(kern.context,  CL_MEM_READ_ONLY,  sizeof(libff::G1<mnt4753_pp>), NULL, NULL);
@@ -691,8 +697,8 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   printf("Max work size: %u\n", kern.local);
 
   printf("queueing multi exp kernel\n");
-  kern.global = n;
-  //kern.local = 64;
+  kern.global = NUM_WORKS;
+  kern.local = 64;
   kern.err = clEnqueueNDRangeKernel(kern.commands, kernel, 1, NULL, &kern.global, &kern.local, 0, NULL, &event);
   if (kern.err)
   {
@@ -704,8 +710,9 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   clWaitForEvents(1, &event);
   clFinish(kern.commands);
 
-  libff::G1<mnt4753_pp> acc = libff::G1<mnt4753_pp>::zero();
-  libff::G1<mnt4753_pp> *res = new libff::G1<mnt4753_pp>[n];
+  //libff::G1<mnt4753_pp> acc = libff::G1<mnt4753_pp>::zero();
+  libff::G1<mnt4753_pp> acc = g_data[0];
+  libff::G1<mnt4753_pp> *res = new libff::G1<mnt4753_pp>[NUM_WORKS];
 
   // Time kernel execution time without read/write
   //
@@ -720,7 +727,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   //
   start = high_resolution_clock::now();
 
-  kern.err = clEnqueueReadBuffer(kern.commands, g1_result_buffer, CL_TRUE, 0, sizeof(libff::G1<mnt4753_pp>) * n, res, 0, NULL, NULL );  
+  kern.err = clEnqueueReadBuffer(kern.commands, g1_result_buffer, CL_TRUE, 0, sizeof(libff::G1<mnt4753_pp>) * NUM_WORKS, res, 0, NULL, NULL );  
   if (kern.err != CL_SUCCESS)
   {
       printf("Error: Failed to read output array! %d\n", kern.err);
@@ -735,9 +742,16 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   // Validate our results
   //
   printf("Kernel Result \n");
-  res[16].print();
+  res[0].print();
   printf("n: %u\n",n);
+  
+  for(int i=0; i<NUM_WORKS; i++) {
+    //acc = acc + res[i];
+    acc = acc.add(res[i]);
+  }
 
+  //acc = acc.add(g_data[0]);
+  acc.print();
 
   // if(results[0] == _h4_1) {
   //   correct++;

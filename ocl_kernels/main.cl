@@ -481,23 +481,32 @@ MNT_G1 G1_add4(MNT_G1 a, MNT_G1 b) {
     int768 ZZ = int768_mul4(a.Z_, a.Z_);
     int768 TXX = int768_add4(XX, XX);
     TXX = int768_add4(TXX, XX);
-    int768 w = int768_add4(int768_mul4(G1_COEFF_A, ZZ), TXX);
+    int768 wz = int768_mul4(G1_COEFF_A, ZZ);
+    int768 w = int768_add4(wz, TXX);
     int768 Y1_Z1 = int768_mul4(a.Y_, a.Z_);
     int768 s = int768_add4(Y1_Z1, Y1_Z1);
     int768 ss = int768_mul4(s, s);
     int768 sss = int768_mul4(s, ss);
     int768 R = int768_mul4(a.Y_, s);
     int768 RR = int768_mul4(R, R);
-    int768 XRR = int768_add4(a.X_, RR);
-    int768 B = int768_sub4(XRR, int768_sub4(XX, RR));
-    int768 h = int768_sub4(int768_mul4(w, w), int768_add4(B, B));
+    int768 XR = int768_add4(a.X_, R);
+    int768 XRXR = int768_mul4(XR, XR);
+    XRXR = int768_sub4(XRXR, XX);
+    int768 B = int768_sub4(XRXR, RR);
+    int768 ww = int768_mul4(w, w);
+    int768 BB = int768_add4(B, B);
+    int768 h = int768_sub4(ww, BB);
     int768 X3 = int768_mul4(h, s);
-    int768 Y3 = int768_mul4(w, int768_sub4(int768_sub4(B, h), int768_add4(R,R)));
+    int768 b_h = int768_sub4(B, h);
+    int768 wbh = int768_mul4(w, b_h);
+    int768 RRRR = int768_add4(RR, RR);
+    int768 Y3 = int768_sub4(wbh, RRRR);
     res.X_ = X3;
     res.Y_ = Y3;
     res.Z_ = sss;
     return res;
   }
+
   // add case
   int768 Z1_Z2 = int768_mul4(a.Z_, b.Z_);
   int768 u = int768_sub4(Y2_Z1, Y1_Z2);
@@ -529,22 +538,29 @@ MNT_G1 G1_double4(MNT_G1 a) {
   int768 ZZ = int768_mul4(a.Z_, a.Z_);
   int768 TXX = int768_add4(XX, XX);
   TXX = int768_add4(TXX, XX);
-  int768 w = int768_add4(int768_mul4(G1_COEFF_A, ZZ), TXX);
+  int768 wz = int768_mul4(G1_COEFF_A, ZZ);
+  int768 w = int768_add4(wz, TXX);
   int768 Y1_Z1 = int768_mul4(a.Y_, a.Z_);
   int768 s = int768_add4(Y1_Z1, Y1_Z1);
   int768 ss = int768_mul4(s, s);
   int768 sss = int768_mul4(s, ss);
   int768 R = int768_mul4(a.Y_, s);
   int768 RR = int768_mul4(R, R);
-  int768 XRR = int768_add4(a.X_, RR);
-  int768 B = int768_sub4(XRR, int768_sub4(XX, RR));
-  int768 h = int768_sub4(int768_mul4(w, w), int768_add4(B, B));
+  int768 XR = int768_add4(a.X_, R);
+  int768 XRXR = int768_mul4(XR, XR);
+  XRXR = int768_sub4(XRXR, XX);
+  int768 B = int768_sub4(XRXR, RR);
+  int768 ww = int768_mul4(w, w);
+  int768 BB = int768_add4(B, B);
+  int768 h = int768_sub4(ww, BB);
   int768 X3 = int768_mul4(h, s);
-  int768 Y3 = int768_mul4(w, int768_sub4(int768_sub4(B, h), int768_add4(R,R)));
+  int768 b_h = int768_sub4(B, h);
+  int768 wbh = int768_mul4(w, b_h);
+  int768 RRRR = int768_add4(RR, RR);
+  int768 Y3 = int768_sub4(wbh, RRRR);
   res.X_ = X3;
   res.Y_ = Y3;
   res.Z_ = sss;
-
   return res;
 }
 
@@ -565,27 +581,7 @@ MNT_G1 G1_mixed_add4(MNT_G1 a, MNT_G1 b) {
   int768 Y2_Z1 = int768_mul4(a.Z_, b.Y_);
 
   if(int768_eq(X1_Z2, X2_Z1) && int768_eq(Y1_Z2, Y2_Z1)) {
-    //return G1_double4(a);
-    int768 XX = int768_mul4(a.X_, a.X_); // todo special case squaring
-    int768 ZZ = int768_mul4(a.Z_, a.Z_);
-    int768 TXX = int768_add4(XX, XX);
-    TXX = int768_add4(TXX, XX);
-    int768 w = int768_add4(int768_mul4(G1_COEFF_A, ZZ), TXX);
-    int768 Y1_Z1 = int768_mul4(a.Y_, a.Z_);
-    int768 s = int768_add4(Y1_Z1, Y1_Z1);
-    int768 ss = int768_mul4(s, s);
-    int768 sss = int768_mul4(s, ss);
-    int768 R = int768_mul4(a.Y_, s);
-    int768 RR = int768_mul4(R, R);
-    int768 XRR = int768_add4(a.X_, RR);
-    int768 B = int768_sub4(XRR, int768_sub4(XX, RR));
-    int768 h = int768_sub4(int768_mul4(w, w), int768_add4(B, B));
-    int768 X3 = int768_mul4(h, s);
-    int768 Y3 = int768_mul4(w, int768_sub4(int768_sub4(B, h), int768_add4(R,R)));
-    res.X_ = X3;
-    res.Y_ = Y3;
-    res.Z_ = sss;
-    return res;
+    return G1_double4(a);
   }
 
   int768 u = int768_sub4(Y2_Z1, a.Y_);
@@ -708,10 +704,19 @@ __kernel void G1_batched_lookup_multiexp(
 
   //bases += skip;
   MNT_G1 p = G1_ZERO;
+  MNT_G1 test = G1_ZERO;
+
   for(int i = 767; i >= 0; i--) {
     p = G1_double4(p);
-    if(int768_get_bit(exps[work], i))
-      p = G1_mixed_add4(p, bases[work]);
+    if(work == 0) {
+      if(i == 0) {
+        test = p;
+      }
+    }
+    for(uint j = nstart; j < nend; j++) {
+      if(int768_get_bit(exps[j], i))
+        p = G1_add4(p, bases[j]);
+    }
   }
-  results[work] = p;
+  results[work] = test;
 }

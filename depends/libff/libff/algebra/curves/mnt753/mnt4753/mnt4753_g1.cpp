@@ -328,7 +328,8 @@ mnt4753_G1 mnt4753_G1::dbl() const
 
         const mnt4753_Fq XX   = (this->X_).squared();                   // XX  = X1^2
         const mnt4753_Fq ZZ   = (this->Z_).squared();                   // ZZ  = Z1^2
-        const mnt4753_Fq w    = mnt4753_G1::coeff_a * ZZ + (XX + XX + XX); // w   = a*ZZ + 3*XX
+        const mnt4753_Fq XXXX = XX + XX;
+        const mnt4753_Fq w    = mnt4753_G1::coeff_a * ZZ + (XXXX + XX); // w   = a*ZZ + 3*XX
         const mnt4753_Fq Y1Z1 = (this->Y_) * (this->Z_);
         const mnt4753_Fq s    = Y1Z1 + Y1Z1;                            // s   = 2*Y1*Z1
         const mnt4753_Fq ss   = s.squared();                            // ss  = s^2
