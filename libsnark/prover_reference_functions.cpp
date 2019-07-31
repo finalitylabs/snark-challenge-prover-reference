@@ -590,32 +590,34 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
 
   // Fill our data set with inputs from param gen
   //
+  bigint<12> r = scalar_data[1].as_bigint();
+  r.print();
+
   libff::G1<mnt4753_pp> *data_bases = new libff::G1<mnt4753_pp>[n];
-  Fr<mnt4753_pp> *data_scalars = new Fr<mnt4753_pp>[n];
+  bigint<12> *data_scalars = new bigint<12>[n];
+
+  // convert out of montgomery form!!!
+  for(int i=1; i<n; i++) {
+    data_scalars[i-1] = scalar_data[i].as_bigint();
+  }
 
   for(int i = 1; i < n; i++) {
     memcpy(&data_bases[i-1], &g_data[i], sizeof(libff::G1<mnt4753_pp>));
   }
 
-  for(int i = 1; i < n; i++) {
-    memcpy(&data_scalars[i-1], &scalar_data[i], sizeof(Fr<mnt4753_pp>));
-  }
-  data_scalars[0].mont_repr.data;
-  data_scalars[0].print();
+  printf("CPU BIT: %u\n", data_scalars[0].test_bit(744));
+  printf("%u\n", data_scalars[0].data[11]);
 
-  printf("CPU BIT: %u\n", data_scalars[0].as_bigint().test_bit(744));
-  printf("%u\n", data_scalars[0].mont_repr.data[11]);
-
-      for(int i=0; i<12; i++) {
-        //std::cout << "Length of array = " << (sizeof(results[1013].non_residue.mont_repr.data)/sizeof(*results[1013].non_residue.mont_repr.data)) << std::endl;
-        cl_uint x;
-        cl_uint y;
-        x = (cl_uint)((data_scalars[0].mont_repr.data[i] & 0xFFFFFFFF00000000LL) >> 32);
-        y = (cl_uint)(data_scalars[0].mont_repr.data[i] & 0xFFFFFFFFLL);
-        gmp_printf("%Mx\n", data_scalars[0].mont_repr.data[i]);
-        printf("%x\n", x);
-        printf("%x\n", y);
-      }
+      // for(int i=0; i<12; i++) {
+      //   //std::cout << "Length of array = " << (sizeof(results[1013].non_residue.mont_repr.data)/sizeof(*results[1013].non_residue.mont_repr.data)) << std::endl;
+      //   cl_uint x;
+      //   cl_uint y;
+      //   x = (cl_uint)((data_scalars[0].mont_repr.data[i] & 0xFFFFFFFF00000000LL) >> 32);
+      //   y = (cl_uint)(data_scalars[0].mont_repr.data[i] & 0xFFFFFFFFLL);
+      //   gmp_printf("%Mx\n", data_scalars[0].mont_repr.data[i]);
+      //   printf("%x\n", x);
+      //   printf("%x\n", y);
+      // }
 
   //exit(1);
 
@@ -642,7 +644,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   printf("creating buffer\n");
   g1_base_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * count, NULL, NULL);
   g1_result_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * n, NULL, NULL);
-  exp_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(Fr<mnt4753_pp>) * count, NULL, NULL);
+  exp_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(bigint<12>) * count, NULL, NULL);
   dm_buffer = clCreateBuffer(kern.context, CL_MEM_READ_ONLY, sizeof(bool) * count, NULL, NULL);
   //res = clCreateBuffer(kern.context,  CL_MEM_READ_ONLY,  sizeof(libff::G1<mnt4753_pp>), NULL, NULL);
 
@@ -663,7 +665,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
       exit(1);
   }
 
-  kern.err = clEnqueueWriteBuffer(kern.commands, exp_buffer, CL_TRUE, 0, sizeof(Fr<mnt4753_pp>) * count, data_scalars, 0, NULL, NULL);
+  kern.err = clEnqueueWriteBuffer(kern.commands, exp_buffer, CL_TRUE, 0, sizeof(bigint<12>) * count, data_scalars, 0, NULL, NULL);
   if (kern.err != CL_SUCCESS)
   {
       printf("Error: Failed to write to source array!\n");
@@ -722,7 +724,6 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   clWaitForEvents(1, &event);
   clFinish(kern.commands);
 
-  libff::G1<mnt4753_pp> acc = libff::G1<mnt4753_pp>::zero();
   //libff::G1<mnt4753_pp> acc = g_data[0];
   libff::G1<mnt4753_pp> *res = new libff::G1<mnt4753_pp>[n];
   bool *dm2 = new bool[length];
@@ -754,9 +755,9 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
       exit(1);
   }
 
-  Fr<mnt4753_pp> *exp_res = new Fr<mnt4753_pp>[n];
+  bigint<12> *exp_res = new bigint<12>[n];
 
-  kern.err = clEnqueueReadBuffer(kern.commands, exp_buffer, CL_TRUE, 0, sizeof(Fr<mnt4753_pp>) * n, exp_res, 0, NULL, NULL );  
+  kern.err = clEnqueueReadBuffer(kern.commands, exp_buffer, CL_TRUE, 0, sizeof(bigint<12>) * n, exp_res, 0, NULL, NULL );  
   if (kern.err != CL_SUCCESS)
   {
       printf("Error: Failed to read output array! %d\n", kern.err);
@@ -773,11 +774,11 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   //
   printf("Kernel Result \n");
   printf("Kernel BIT: %u\n", dm2[0]);
-  //exp_res[0].as_bigint().print();
+  exp_res[0].print();
   //data_scalars[0].as_bigint().print();
-  res[0].print();
+  res[1].print();
   printf("cpu scale:\n");
-  libff::G1<mnt4753_pp> test = data_scalars[0].mont_repr * data_bases[0];
+  libff::G1<mnt4753_pp> test = scalar_data[1].as_bigint() * data_bases[1];
   test.print();
   //data_bases[0].print();
 
@@ -785,34 +786,41 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
     libff::G1<mnt4753_pp> result = libff::G1<mnt4753_pp>::zero();
 
     bool found_one = false;
-    for (long i = data_scalars[0].as_bigint().max_bits() - 1; i >= 0; --i)
+    for (long i = data_scalars[1].max_bits() - 1; i >= 0; --i)
     {
         if (found_one)
         {
             result = result.dbl();
         }
 
-        if (data_scalars[0].mont_repr.test_bit(i))
+        if (data_scalars[1].test_bit(i))
         {
             found_one = true;
-            result = result + data_bases[0];
+            result = result + data_bases[1];
         }
     }
     result.print();
 
   printf("n: %u\n",n);
-  
+  libff::G1<mnt4753_pp> acc = libff::G1<mnt4753_pp>::zero();
+  acc = acc + g_data[0];
+
   for(int i=0; i<n; i++) {
     //acc = acc + res[i];
     acc = acc + res[i];
   }
 
-  acc = acc + g_data[0];
   acc.print();
+  
+  // libff::G1<mnt4753_pp> acc2 = libff::G1<mnt4753_pp>::zero();
 
-  // if(results[0] == _h4_1) {
-  //   correct++;
+  // for(int i=0; i<n; i++) {
+  //   libff::G1<mnt4753_pp> test = data_scalars[i].mont_repr * data_bases[i];
+  //   acc2 = acc2 + test;
   // }
+
+  // acc2 = acc2 + g_data[0];
+  // acc2.print();
 
   
   // Print a brief summary detailing the results
