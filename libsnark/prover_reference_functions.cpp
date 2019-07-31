@@ -22,7 +22,8 @@
 using namespace libff;
 using namespace libsnark;
 
-const multi_exp_method method = multi_exp_method_BDLO12;
+// const multi_exp_method method = multi_exp_method_BDLO12;
+ const multi_exp_method method = multi_exp_method_naive_plain;
 
 //#include "ocl_kernels/kernel.cpp"
 // #define __CL_ENABLE_EXCEPTIONS
@@ -569,11 +570,6 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   g_data[0].print();
   //scalar_data[0].print();
   
-  //libff::G1<mnt4753_pp> *table = new libff::G1<mnt4753_pp>[length];
-  // initialize table
-  //for(int i=0; i<length; i++) { table[i] = table[i] + g_data[i]; }
-  
-  // compute table with kernel
   cl_kernel kernel;                   // compute kernel
   cl_event event;                     // timing
   cl_ulong time_start;
@@ -604,8 +600,26 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   for(int i = 1; i < n; i++) {
     memcpy(&data_scalars[i-1], &scalar_data[i], sizeof(Fr<mnt4753_pp>));
   }
-  
-  
+  data_scalars[0].mont_repr.data;
+  data_scalars[0].print();
+
+  printf("CPU BIT: %u\n", data_scalars[0].as_bigint().test_bit(744));
+  printf("%u\n", data_scalars[0].mont_repr.data[11]);
+
+      for(int i=0; i<12; i++) {
+        //std::cout << "Length of array = " << (sizeof(results[1013].non_residue.mont_repr.data)/sizeof(*results[1013].non_residue.mont_repr.data)) << std::endl;
+        cl_uint x;
+        cl_uint y;
+        x = (cl_uint)((data_scalars[0].mont_repr.data[i] & 0xFFFFFFFF00000000LL) >> 32);
+        y = (cl_uint)(data_scalars[0].mont_repr.data[i] & 0xFFFFFFFFLL);
+        gmp_printf("%Mx\n", data_scalars[0].mont_repr.data[i]);
+        printf("%x\n", x);
+        printf("%x\n", y);
+      }
+
+  //exit(1);
+
+
   printf("copied base: \n");
   data_scalars[0].print();
   //data_bases[453].print();
@@ -740,6 +754,16 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
       exit(1);
   }
 
+  Fr<mnt4753_pp> *exp_res = new Fr<mnt4753_pp>[n];
+
+  kern.err = clEnqueueReadBuffer(kern.commands, exp_buffer, CL_TRUE, 0, sizeof(Fr<mnt4753_pp>) * n, exp_res, 0, NULL, NULL );  
+  if (kern.err != CL_SUCCESS)
+  {
+      printf("Error: Failed to read output array! %d\n", kern.err);
+      exit(1);
+  }
+
+
   clFinish(kern.commands);
   stop = high_resolution_clock::now();
   duration = duration_cast<microseconds>(stop - start); 
@@ -749,10 +773,33 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   //
   printf("Kernel Result \n");
   printf("Kernel BIT: %u\n", dm2[0]);
-  //res[0].print();
+  //exp_res[0].as_bigint().print();
+  //data_scalars[0].as_bigint().print();
+  res[0].print();
+  printf("cpu scale:\n");
+  libff::G1<mnt4753_pp> test = data_scalars[0].mont_repr * data_bases[0];
+  test.print();
+  //data_bases[0].print();
 
-  Fr<mnt4753_pp> g = data_scalars[0].as_bigint();
-  printf("CPU BIT: %u\n", g.as_bigint().test_bit(0));
+
+    libff::G1<mnt4753_pp> result = libff::G1<mnt4753_pp>::zero();
+
+    bool found_one = false;
+    for (long i = data_scalars[0].as_bigint().max_bits() - 1; i >= 0; --i)
+    {
+        if (found_one)
+        {
+            result = result.dbl();
+        }
+
+        if (data_scalars[0].mont_repr.test_bit(i))
+        {
+            found_one = true;
+            result = result + data_bases[0];
+        }
+    }
+    result.print();
+
   printf("n: %u\n",n);
   
   for(int i=0; i<n; i++) {

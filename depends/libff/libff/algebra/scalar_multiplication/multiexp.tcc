@@ -125,7 +125,7 @@ T multi_exp_inner(
     typename std::vector<FieldT>::const_iterator scalar_start,
     typename std::vector<FieldT>::const_iterator scalar_end)
 {
-    //printf("multi_exp_inner overload 1\n");
+    printf("multi_exp_inner overload 1\n");
     T result(T::zero());
 
     typename std::vector<T>::const_iterator vec_it;
@@ -149,7 +149,7 @@ T multi_exp_inner(
     typename std::vector<FieldT>::const_iterator scalar_start,
     typename std::vector<FieldT>::const_iterator scalar_end)
 {
-    //printf("multi_exp_inner overload 2\n");
+    printf("multi_exp_inner overload 2\n");
     T result(T::zero());
 
     typename std::vector<T>::const_iterator vec_it;
