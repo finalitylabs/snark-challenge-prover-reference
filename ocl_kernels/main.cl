@@ -776,8 +776,9 @@ __kernel void G1_batched_lookup_multiexp(
   MNT_G1 res = G1_ZERO;
   for(uint i = nstart; i < nend; i++) {
     uint ind = EXPONENT_get_bits(exps[i], bits, w);
-    if(bits == 0 && ind == 1) res = G1_add4(res, bases[i]);
-    else if(ind--) buckets[ind] = G1_add4(buckets[ind], bases[i]);
+    //if(bits == 0 && ind == 1) res = G1_add4(res, bases[i]);
+    //else if(ind--) buckets[ind] = G1_add4(buckets[ind], bases[i]);
+    if(ind > 0) buckets[ind -1] = G1_add4(buckets[ind-1], bases[i]);
   }
 
   MNT_G1 acc = G1_ZERO;

@@ -556,10 +556,10 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
                               mnt4753_libsnark::vector_G1 *g_start,
                               size_t length, Kernel kern) {
   printf("GPU MULTI_EXP START\n");
-  size_t NUM_GROUPS  = 192;
-  size_t WINDOW_SIZE = 7;
-  size_t NUM_WINDOWS = 110;
-  size_t TABLE_SIZE = 1 << WINDOW_SIZE;
+  size_t LEN = 4; // global size 4096 when n = 16384
+  size_t WINDOW_SIZE = 7; // log2(length) - (log2(length)/3-2)
+  size_t NUM_GROUPS  = 110; // 768 + WINDOW_SIZE - 1 / WINDOW_SIZE
+  size_t NUM_WINDOWS = NUM_GROUPS;
   size_t BUCKET_LEN = 1 << WINDOW_SIZE;
 
   std::vector<Fr<mnt4753_pp>> &scalar_data = *scalar_start->data;
@@ -626,8 +626,8 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   //
   printf("creating buffer\n");
   g1_base_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * count, NULL, NULL);
-  g1_result_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * NUM_WINDOWS * NUM_GROUPS, NULL, NULL);
-  g1_bucket_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * BUCKET_LEN * NUM_WINDOWS * NUM_GROUPS, NULL, NULL);
+  g1_result_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * (n / LEN), NULL, NULL);
+  g1_bucket_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * BUCKET_LEN * (n / LEN), NULL, NULL);
   exp_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(bigint<12>) * count, NULL, NULL);
   //dm_buffer = clCreateBuffer(kern.context, CL_MEM_READ_ONLY, sizeof(bool) * count, NULL, NULL);
   //res = clCreateBuffer(kern.context,  CL_MEM_READ_ONLY,  sizeof(libff::G1<mnt4753_pp>), NULL, NULL);
@@ -696,7 +696,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   printf("Max work size: %u\n", kern.local);
 
   printf("queueing multi exp kernel\n");
-  kern.global = NUM_WINDOWS * NUM_GROUPS;
+  kern.global = (n / LEN);
   kern.local = 64;
   kern.err = clEnqueueNDRangeKernel(kern.commands, kernel, 1, NULL, &kern.global, &kern.local, 0, NULL, &event);
   if (kern.err)
@@ -741,7 +741,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   //
   printf("Kernel Result \n");
   
-  res[0].print();
+  res[1].print();
   unsigned int bits = 0;
   for(int i=0; i<NUM_WINDOWS; i++) {
     unsigned int w = std::min(static_cast<unsigned int>(WINDOW_SIZE), (768 - bits));

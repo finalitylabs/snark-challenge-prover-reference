@@ -195,7 +195,7 @@ T multi_exp_inner(
     }
 
     size_t num_groups = (num_bits + c - 1) / c;
-
+    printf("num groups: %u\n", num_groups);
     T result;
 
     bool result_nonzero = false;
