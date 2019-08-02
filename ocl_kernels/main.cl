@@ -743,10 +743,10 @@ __kernel void mnt4753_fft(
 // Multi_exp functions
 //
 
-#define NUM_WORKS (192)
-#define NUM_WINDOWS (110)
-#define WINDOW_SIZE (7)
-#define BUCKET_LEN ((1 << WINDOW_SIZE) - 1)
+#define NUM_WORKS (16)
+#define NUM_WINDOWS (64)
+#define WINDOW_SIZE (12)
+#define BUCKET_LEN (1 << WINDOW_SIZE)
 
 __kernel void G1_batched_lookup_multiexp(
     __global MNT_G1 *bases,
@@ -758,34 +758,91 @@ __kernel void G1_batched_lookup_multiexp(
 
   uint32 gid = get_global_id(0);
 
-  if(gid == 20735) {
-    printf("found unit\n");
-  }
-
-  //bases += skip;
+  bases += NUM_WORKS * gid;
   buckets += BUCKET_LEN * gid;
+  exps += NUM_WORKS * gid;
+
   for(uint i = 0; i < BUCKET_LEN; i++) buckets[i] = G1_ZERO;
 
   uint len = (uint)ceil(n / (float)NUM_WORKS);
-  uint32 nstart = len * (gid / NUM_WINDOWS);
-  uint32 nend = min(nstart + len, n);
+  uint32 nstart = NUM_WORKS * gid;
+  uint32 nend = nstart + (NUM_WORKS-1);
+  bool result_nonzero = false;
 
-  uint bits = (gid % NUM_WINDOWS) * WINDOW_SIZE;
-  ushort w = min((ushort)WINDOW_SIZE, (ushort)(768 - bits));
+  if(gid == 1) {
+    printf("len: %u\n", len);
+    printf("nstart: %u\n", nstart);
+    printf("nend: %u\n", nend);
+    //buckets[122].X_ = G1_COEFF_A;
+    printf("is zero: %u\n", is_zero(buckets[122]));
+  }
 
   MNT_G1 res = G1_ZERO;
-  for(uint i = nstart; i < nend; i++) {
-    uint ind = EXPONENT_get_bits(exps[i], bits, w);
-    //if(bits == 0 && ind == 1) res = G1_add4(res, bases[i]);
-    //else if(ind--) buckets[ind] = G1_add4(buckets[ind], bases[i]);
-    if(ind > 0) buckets[ind -1] = G1_add4(buckets[ind-1], bases[i]);
-  }
+  for(uint k = NUM_WINDOWS-1; k<=NUM_WINDOWS; k--) {
+    if(gid == 1) {
+      printf("k: %u\n", k);
+    }
+    if (result_nonzero) {
+      for (uint i = 0; i < WINDOW_SIZE; i++) {
+        res = G1_double4(res);
+      }
+    }
 
-  MNT_G1 acc = G1_ZERO;
-  for(int j = BUCKET_LEN - 1; j >= 0; j--) {
-    acc = G1_add4(acc, buckets[j]);
-    res = G1_add4(res, acc);
-  }
+    for(uint i = 0; i < BUCKET_LEN; i++) buckets[i] = G1_ZERO;
 
+    for(uint i=nstart; i<nend; i++) {
+      uint id = 0;
+      for(uint j=WINDOW_SIZE-1; j<=WINDOW_SIZE; j--) {
+        if(gid==2 && k==94) {
+          printf("bit: %u\n", k*WINDOW_SIZE + j);
+          printf("j: %u\n", j);
+          printf("id before: %u\n", id);
+          printf("is set: %u\n", int768_get_bit(exps[i], k*WINDOW_SIZE + j));
+        }
+        if(int768_get_bit(exps[i], k*WINDOW_SIZE + j)) {
+          id |= 1 << (WINDOW_SIZE-(j+1));
+        }
+        if(gid==2 && k==94) {
+          printf("id after: %u\n", id);
+        }
+      } 
+
+      if(id != 0) {
+        //if(is_zero(buckets[id])) {
+        //  buckets[id] = bases[i];
+        //} else {
+          buckets[id] = G1_add4(buckets[id], bases[i]);
+        //}
+      }
+    }
+
+    MNT_G1 acc = G1_ZERO;
+    bool running_sum_nonzero = false;
+    for(int i = BUCKET_LEN - 1; i>=0; i--) {
+        if(gid==2 && k==94) {
+          printf("id bucket loop i: %u\n", i);
+        }
+        if(!is_zero(buckets[i])) {
+          if (running_sum_nonzero){
+            acc = G1_add4(acc, buckets[i]);
+          } else {
+            acc = buckets[i];
+            running_sum_nonzero = true;
+          }
+        }
+        if(running_sum_nonzero){
+          if(result_nonzero) {
+            res = G1_add4(res, acc);
+          } else {
+            res = acc;
+            result_nonzero = true;
+          }
+        }
+
+        //acc = G1_add4(acc, buckets[i]);
+        //res = G1_add4(res, acc);
+    }
+    result_nonzero = true;
+  }
   results[gid] = res;
 }

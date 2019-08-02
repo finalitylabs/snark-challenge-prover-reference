@@ -25,6 +25,8 @@
 #include <libff/common/profiling.hpp>
 #include <libff/common/utils.hpp>
 
+#include <thread>
+
 namespace libff {
 
 template<mp_size_t n>
@@ -173,6 +175,8 @@ T multi_exp_inner(
     typename std::vector<FieldT>::const_iterator exponents_end)
 {
     //printf("multi_exp_inner overload 3\n");
+    std::thread::id this_id = std::this_thread::get_id();
+
     UNUSED(exponents_end);
     size_t length = bases_end - bases;
 
@@ -220,6 +224,18 @@ T multi_exp_inner(
             {
                 if (bn_exponents[i].test_bit(k*c + j))
                 {
+                    if(k==73) {
+                      if(i==0) {
+                        //if(j==0) {
+                          printf("thread id %u\n", this_id);
+                          printf("num groups: %u\n", num_groups);
+                          printf("bit id: %u\n", k*c + j);
+                          printf("id before: %u\n", id);
+                          id |= 1 << j;
+                          printf("id after : %u\n", id);
+                        //}
+                      }
+                    }
                     id |= 1 << j;
                 }
             }

@@ -556,9 +556,9 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
                               mnt4753_libsnark::vector_G1 *g_start,
                               size_t length, Kernel kern) {
   printf("GPU MULTI_EXP START\n");
-  size_t LEN = 4; // global size 4096 when n = 16384
-  size_t WINDOW_SIZE = 7; // log2(length) - (log2(length)/3-2)
-  size_t NUM_GROUPS  = 110; // 768 + WINDOW_SIZE - 1 / WINDOW_SIZE
+  size_t LEN = 16; // global size 4096 when n = 16384
+  size_t WINDOW_SIZE = 12; // log2(length) - (log2(length)/3-2)
+  size_t NUM_GROUPS  = 64; // 768 + WINDOW_SIZE - 1 / WINDOW_SIZE
   size_t NUM_WINDOWS = NUM_GROUPS;
   size_t BUCKET_LEN = 1 << WINDOW_SIZE;
 
@@ -697,7 +697,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
 
   printf("queueing multi exp kernel\n");
   kern.global = (n / LEN);
-  kern.local = 64;
+  //kern.local = 64;
   kern.err = clEnqueueNDRangeKernel(kern.commands, kernel, 1, NULL, &kern.global, &kern.local, 0, NULL, &event);
   if (kern.err)
   {
@@ -711,7 +711,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
 
   libff::G1<mnt4753_pp> acc = libff::G1<mnt4753_pp>::zero();
   //libff::G1<mnt4753_pp> acc = g_data[0];
-  libff::G1<mnt4753_pp> *res = new libff::G1<mnt4753_pp>[NUM_WINDOWS * NUM_GROUPS];
+  libff::G1<mnt4753_pp> *res = new libff::G1<mnt4753_pp>[n / LEN];
 
   // Time kernel execution time without read/write
   //
@@ -726,7 +726,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   //
   start = high_resolution_clock::now();
 
-  kern.err = clEnqueueReadBuffer(kern.commands, g1_result_buffer, CL_TRUE, 0, sizeof(libff::G1<mnt4753_pp>) * (NUM_WINDOWS * NUM_GROUPS), res, 0, NULL, NULL );  
+  kern.err = clEnqueueReadBuffer(kern.commands, g1_result_buffer, CL_TRUE, 0, sizeof(libff::G1<mnt4753_pp>) * (n / LEN), res, 0, NULL, NULL );  
   if (kern.err != CL_SUCCESS)
   {
       printf("Error: Failed to read output array! %d\n", kern.err);
@@ -742,16 +742,22 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   printf("Kernel Result \n");
   
   res[1].print();
-  unsigned int bits = 0;
-  for(int i=0; i<NUM_WINDOWS; i++) {
-    unsigned int w = std::min(static_cast<unsigned int>(WINDOW_SIZE), (768 - bits));
-    for(int j=0; j<w; j++) {
-      acc.dbl();
-    }
-    for(int g=0; g<NUM_GROUPS; g++) {
-      acc = acc + res[g * NUM_WINDOWS + i];
-    }
-    bits += w;
+  // unsigned int bits = 0;
+  // for(int i=0; i<NUM_WINDOWS; i++) {
+  //   unsigned int w = std::min(static_cast<unsigned int>(WINDOW_SIZE), (768 - bits));
+  //   for(int j=0; j<w; j++) {
+  //     acc.dbl();
+  //   }
+  //   for(int g=0; g<NUM_GROUPS; g++) {
+  //     acc = acc + res[g * NUM_WINDOWS + i];
+  //   }
+  //   bits += w;
+  // }
+  // acc = acc + g_data[0];
+  // acc.print();
+
+  for(int i=0; i<(n/LEN); i++) {
+    acc = acc + res[i];
   }
   acc = acc + g_data[0];
   acc.print();
