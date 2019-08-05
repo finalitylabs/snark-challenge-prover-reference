@@ -556,11 +556,11 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
                               mnt4753_libsnark::vector_G1 *g_start,
                               size_t length, Kernel kern) {
   printf("GPU MULTI_EXP START\n");
-  size_t LEN = 16; // global size 4096 when n = 16384
-  size_t WINDOW_SIZE = 12; // log2(length) - (log2(length)/3-2)
-  size_t NUM_GROUPS  = 64; // 768 + WINDOW_SIZE - 1 / WINDOW_SIZE
+  size_t LEN = 1; // global size 4096 when n = 16384
+  size_t WINDOW_SIZE = 1; // log2(length) - (log2(length)/3-2)
+  size_t NUM_GROUPS  = 768; // 768 + WINDOW_SIZE - 1 / WINDOW_SIZE
   size_t NUM_WINDOWS = NUM_GROUPS;
-  size_t BUCKET_LEN = 1 << WINDOW_SIZE;
+  size_t BUCKET_LEN = 1;
 
   std::vector<Fr<mnt4753_pp>> &scalar_data = *scalar_start->data;
   std::vector<libff::G1<mnt4753_pp>> &g_data = *g_start->data;
@@ -588,7 +588,6 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   // not sure how to handle the skip buffer, i dont see it in libsnark yet
   // /depends/libff/algebra/scalar_mul/multiexp.tcc appears to have the impl
   //cl_mem dm_buffer;
-  //cl_mem res;
 
   // Fill our data set with inputs from param gen
   //
@@ -596,7 +595,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   libff::G1<mnt4753_pp> *data_bases = new libff::G1<mnt4753_pp>[n];
   bigint<12> *data_scalars = new bigint<12>[n];
 
-  for(int i = 1; i < n; i++) {
+  for(int i=1; i<n; i++) {
     memcpy(&data_bases[i-1], &g_data[i], sizeof(libff::G1<mnt4753_pp>));
   }
 
@@ -609,8 +608,6 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   data_scalars[0].print();
 
   //exit(1);
-  unsigned int count = n;
-
 
   // Create the compute kernel in the program we wish to run
   //
@@ -625,43 +622,35 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   // Create the input and output arrays in device memory for our calculation
   //
   printf("creating buffer\n");
-  g1_base_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * count, NULL, NULL);
+  g1_base_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * n, NULL, NULL);
   g1_result_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * (n / LEN), NULL, NULL);
   g1_bucket_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(libff::G1<mnt4753_pp>) * BUCKET_LEN * (n / LEN), NULL, NULL);
-  exp_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(bigint<12>) * count, NULL, NULL);
+  exp_buffer = clCreateBuffer(kern.context,  CL_MEM_READ_WRITE,  sizeof(bigint<12>) * n, NULL, NULL);
   //dm_buffer = clCreateBuffer(kern.context, CL_MEM_READ_ONLY, sizeof(bool) * count, NULL, NULL);
-  //res = clCreateBuffer(kern.context,  CL_MEM_READ_ONLY,  sizeof(libff::G1<mnt4753_pp>), NULL, NULL);
-
-  // if (!g1_base_buffer || !g1_result_buffer)
-  // {
-  //     printf("Error: Failed to allocate device memory!\n");
-  //     exit(1);
-  // }
+ 
+  if (!g1_base_buffer || !g1_bucket_buffer)
+  {
+      printf("Error: Failed to allocate device memory!\n");
+      exit(1);
+  }
   // Write our data set into the input array in device memory 
   //
   auto start = high_resolution_clock::now();
-  for(int i=0; i<length; i++) {
 
-  }
-  kern.err = clEnqueueWriteBuffer(kern.commands, g1_base_buffer, CL_TRUE, 0, sizeof(libff::G1<mnt4753_pp>) * count, data_bases, 0, NULL, NULL);
+  kern.err = clEnqueueWriteBuffer(kern.commands, g1_base_buffer, CL_TRUE, 0, sizeof(libff::G1<mnt4753_pp>) * n, data_bases, 0, NULL, NULL);
   if (kern.err != CL_SUCCESS)
   {
       printf("Error: Failed to write to base source array!\n");
       exit(1);
   }
 
-  kern.err = clEnqueueWriteBuffer(kern.commands, exp_buffer, CL_TRUE, 0, sizeof(bigint<12>) * count, data_scalars, 0, NULL, NULL);
+  kern.err = clEnqueueWriteBuffer(kern.commands, exp_buffer, CL_TRUE, 0, sizeof(bigint<12>) * n, data_scalars, 0, NULL, NULL);
   if (kern.err != CL_SUCCESS)
   {
       printf("Error: Failed to write to source array!\n");
       exit(1);
   }
-  // kern.err = clEnqueueWriteBuffer(kern.commands, dm_buffer, CL_TRUE, 0, sizeof(bool) * count, dm, 0, NULL, NULL);
-  // if (kern.err != CL_SUCCESS)
-  // {
-  //     printf("Error: Failed to write to omega source array!\n");
-  //     exit(1);
-  // }
+
   auto stop = high_resolution_clock::now();
   auto duration = duration_cast<microseconds>(stop - start); 
   cout << "Time taken by GPU write function: "
@@ -697,7 +686,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
 
   printf("queueing multi exp kernel\n");
   kern.global = (n / LEN);
-  //kern.local = 64;
+  kern.local = 64;
   kern.err = clEnqueueNDRangeKernel(kern.commands, kernel, 1, NULL, &kern.global, &kern.local, 0, NULL, &event);
   if (kern.err)
   {
@@ -710,8 +699,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   clFinish(kern.commands);
 
   libff::G1<mnt4753_pp> acc = libff::G1<mnt4753_pp>::zero();
-  //libff::G1<mnt4753_pp> acc = g_data[0];
-  libff::G1<mnt4753_pp> *res = new libff::G1<mnt4753_pp>[n / LEN];
+  libff::G1<mnt4753_pp> res[n / LEN];
 
   // Time kernel execution time without read/write
   //
@@ -726,7 +714,7 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   //
   start = high_resolution_clock::now();
 
-  kern.err = clEnqueueReadBuffer(kern.commands, g1_result_buffer, CL_TRUE, 0, sizeof(libff::G1<mnt4753_pp>) * (n / LEN), res, 0, NULL, NULL );  
+  kern.err = clEnqueueReadBuffer(kern.commands, g1_result_buffer, CL_TRUE, 0, sizeof(libff::G1<mnt4753_pp>) * (n / LEN), &res, 0, NULL, NULL );  
   if (kern.err != CL_SUCCESS)
   {
       printf("Error: Failed to read output array! %d\n", kern.err);
@@ -741,20 +729,9 @@ mnt4753_libsnark::multiexp_G1_GPU(mnt4753_libsnark::vector_Fr *scalar_start,
   //
   printf("Kernel Result \n");
   
-  res[1].print();
-  // unsigned int bits = 0;
-  // for(int i=0; i<NUM_WINDOWS; i++) {
-  //   unsigned int w = std::min(static_cast<unsigned int>(WINDOW_SIZE), (768 - bits));
-  //   for(int j=0; j<w; j++) {
-  //     acc.dbl();
-  //   }
-  //   for(int g=0; g<NUM_GROUPS; g++) {
-  //     acc = acc + res[g * NUM_WINDOWS + i];
-  //   }
-  //   bits += w;
-  // }
-  // acc = acc + g_data[0];
-  // acc.print();
+  res[20].print();
+
+  printf("size: %u\n", sizeof(res) / sizeof(*res));
 
   for(int i=0; i<(n/LEN); i++) {
     acc = acc + res[i];
